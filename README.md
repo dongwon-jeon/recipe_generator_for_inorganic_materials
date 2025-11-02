@@ -1,4 +1,4 @@
-# A Recipe Generator for Inorganic Solid-Phase Materials Snthesis
+# A Recipe Generator for Inorganic Solid-Phase Materials Synthesis
 To be update.
 
 ### Usage: streamlit run demo.py        
