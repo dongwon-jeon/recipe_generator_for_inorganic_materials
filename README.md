@@ -1,8 +1,18 @@
 # A Recipe Generator for Inorganic Solid-Phase Materials Synthesis
 To be update.
 
-### Usage: streamlit run demo.py        
-
+## Usage
+----------
+Use python=3.11 and install the required packages using the following command:     
+```
+pip install -r requirements.txt
+```
+Run in your environment to predict the synthesis recipe.     
+```
+streamlit run demo.py
+```
+Or try it on our website:     
+(To be update)
 
 * Cite: (To be update)      
 * Contact: jdwjyl2007@ajou.ac.kr
