@@ -45,6 +45,18 @@ def sanitize_api_key(api_key: str) -> str:
         return ""
     return re.sub(r"\s+", "", api_key).strip()
 
+def is_invalid_api_key(api_key: str) -> bool:
+    clean_api_key = sanitize_api_key(api_key)
+
+    invalid_values = {
+        "",
+        "empty",
+        "EnteryourownAPIKEY",
+        "PleaseinputyourOpenAIAPIkey.",
+        "PleaseinputyourOpenRouterAPIkey.",
+    }
+
+    return clean_api_key in invalid_values
 
 # Set default key by provider
 if st.session_state.api_provider == "OpenAI":
@@ -65,54 +77,37 @@ else:  # OpenRouter
         default_key = "Please input your OpenRouter API key."
     api_key_input = st.sidebar.text_input("OpenRouter API Key", default_key, type="password")
 
-update_key = st.sidebar.button("Update Key")
+update_key = st.sidebar.button("Update")
 
 if update_key:
     clean_api_key = sanitize_api_key(api_key_input)
 
-    if not clean_api_key or clean_api_key in [
-        "Please input your OpenAI API key.",
-        "Please input your OpenRouter API key.",
-        "empty",
-        "Enter your own API KEY",
-    ]:
+    if is_invalid_api_key(clean_api_key):
         st.sidebar.error("Please enter a valid API key.")
         st.stop()
 
-    old_key = None
-
     if api_provider == "OpenAI":
-        old_key = st.session_state.get("openai_key", "None")
         st.session_state.openai_key = clean_api_key
         st.session_state.api_provider = "OpenAI"
         litellm.openai_key = clean_api_key
         litellm.api_key = clean_api_key
         if hasattr(litellm, "openrouter_key"):
             litellm.openrouter_key = None
-        st.sidebar.success("OpenAI API key updated!")
     else:
-        old_key = st.session_state.get("openrouter_key", "None")
         st.session_state.openrouter_key = clean_api_key
         st.session_state.api_provider = "OpenRouter"
         litellm.openrouter_key = clean_api_key
         litellm.api_key = clean_api_key
-        st.sidebar.success("OpenRouter API key updated!")
 
     if clean_api_key != api_key_input:
-        st.sidebar.info("Whitespace characters in the API key were removed automatically.")
+        st.session_state.api_key_info_message = "Whitespace characters in the API key were removed automatically."
 
-    print(f"[API Key Update] Provider: {api_provider}")
-    print(f"[API Key Update] Old Key: ...{old_key[-10:] if old_key and len(old_key) > 10 else 'None'}")
-    print(f"[API Key Update] New Key: ...{clean_api_key[-10:]}")
+    st.session_state.api_key_success_message = f"{api_provider} API key was updated successfully."
 
     try:
         get_predictors.clear()
-        print("[API Key Update] Predictor cache cleared")
     except NameError:
         pass
-
-    masked_key = f"...{clean_api_key[-6:]}" if len(clean_api_key) > 6 else "***"
-    st.toast(f"{api_provider} API Key updated successfully ({masked_key})")
 
     if hasattr(st.session_state, "messages"):
         del st.session_state.messages
@@ -122,7 +117,6 @@ if update_key:
         del st.session_state.retrieval_info
 
     st.rerun()
-
 
 # Set the currently used provider and key
 current_provider = st.session_state.get("api_provider", "OpenAI")
@@ -134,6 +128,14 @@ else:
 # Show a warning if there is no API key
 if not current_api_key or current_api_key in ["Please input your OpenAI API key.", "Please input your OpenRouter API key.", "empty"]:
     st.sidebar.warning(f"Please set your {current_provider} API key above.")
+
+if "api_key_success_message" in st.session_state:
+    st.sidebar.success(st.session_state.api_key_success_message)
+    del st.session_state.api_key_success_message
+
+if "api_key_info_message" in st.session_state:
+    st.sidebar.info(st.session_state.api_key_info_message)
+    del st.session_state.api_key_info_message
 
 # Model selection (applies immediately outside the form)
 st.sidebar.markdown("---")
@@ -216,6 +218,11 @@ with st.sidebar, st.form("recipe_form"):
             st.write(file.name)
 
     generate_btn = st.form_submit_button("Recommend")
+
+
+if generate_btn and is_invalid_api_key(current_api_key):
+    st.warning("Please enter your API key and click 'Update' before generating a recipe.")
+    st.stop()
 
 clear_btn = st.sidebar.button("Clear Conversation")
 if clear_btn:
