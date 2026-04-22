@@ -119,8 +119,8 @@ If the API key is copied with unintended spaces, tabs, or line breaks, the demo 
 ## Example input
 
 ```text
-Material Name: LiCr(SeO3)2
-Synthesis Technique: solid-state reaction
+Material Name: LiGa(SeO3)2
+Synthesis Technique: mechanochemical process
 Application: solid-state electrolyte
 ```
 
@@ -128,12 +128,12 @@ Application: solid-state electrolyte
 
 ```text
 ## Target_Materials
-LiCr(SeO3)2
+LiGa(SeO3)2
 
 ## Precursors
-- LiOH·H2O
-- Cr(NO3)3·9H2O
-- Se
+- Li2CO3
+- Ga2O3
+- SeO2
 
 ## Synthesis Recipe
 Step 1: ...
@@ -141,16 +141,6 @@ Step 2: ...
 Step 3: ...
 ```
 
-## Prediction scripts
-
-Example command for recipe prediction:
-
-```bash
-top_k=5
-python predict.py --use_rag --top_k $top_k --batch_size 200 --model o3-mini
-```
-
-If benchmark evaluation is needed, use the corresponding scripts in the benchmark workflow.
 
 ## Notes
 
