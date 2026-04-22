@@ -4,7 +4,7 @@ Paper: [TBU]
 
 Dataset: [https://huggingface.co/datasets/wjsehdrnfl428/dataset_for_recipe_generator](https://huggingface.co/datasets/wjsehdrnfl428/dataset_for_recipe_generator)     
 
-Contact: [jdwjyl2007@ajou.ac.kr](jdwjyl2007@ajou.ac.kr)
+---
 
 This repository provides a retrieval-augmented generation pipeline for literature-guided recipe prediction in inorganic solid-state synthesis. The workflow first constructs a structured dataset from synthesis papers and then generates a stepwise synthesis recipe from user-defined key contributions.
 
@@ -151,3 +151,6 @@ Step 3: ...
 ## Notes
 
 The generated recipe is a literature-guided synthesis suggestion and should be experimentally validated. The retrieval and generation outputs depend on the selected model, available API access, and user-provided inputs.
+
+## Contacts
+e-mail: [jdwjyl2007@ajou.ac.kr](mailto:jdwjyl2007@ajou.ac.kr)
