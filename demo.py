@@ -7,6 +7,7 @@ HARDCODED_OPENAI_KEY = "Enter your own API KEY"
 
 import streamlit as st
 import os
+import re
 from experiment.predict import RAGRecipePredictor, RecipePredictor
 from litellm import embedding
 import litellm
@@ -39,6 +40,12 @@ api_provider = st.sidebar.radio(
 # Set default key (Hardcoded)
 st.session_state.api_provider = st.session_state.get("api_provider_selector", "OpenAI")
 
+def sanitize_api_key(api_key: str) -> str:
+    if api_key is None:
+        return ""
+    return re.sub(r"\s+", "", api_key).strip()
+
+
 # Set default key by provider
 if st.session_state.api_provider == "OpenAI":
     # If the key is not in session_state, initialize with the hardcoded key
@@ -59,49 +66,63 @@ else:  # OpenRouter
     api_key_input = st.sidebar.text_input("OpenRouter API Key", default_key, type="password")
 
 update_key = st.sidebar.button("Update Key")
+
 if update_key:
-    # Validate the entered key
-    if not api_key_input or api_key_input in ["Please input your OpenAI API key.", "Please input your OpenRouter API key.", "empty", "Enter your own API KEY"]:
+    clean_api_key = sanitize_api_key(api_key_input)
+
+    if not clean_api_key or clean_api_key in [
+        "Please input your OpenAI API key.",
+        "Please input your OpenRouter API key.",
+        "empty",
+        "Enter your own API KEY",
+    ]:
         st.sidebar.error("Please enter a valid API key.")
         st.stop()
 
-    # Previous key (for debugging)
     old_key = None
+
     if api_provider == "OpenAI":
         old_key = st.session_state.get("openai_key", "None")
-        st.session_state.openai_key = api_key_input
+        st.session_state.openai_key = clean_api_key
         st.session_state.api_provider = "OpenAI"
-        # Set OpenAI key
-        litellm.openai_key = api_key_input
-        litellm.api_key = api_key_input
-        # Reset OpenRouter key
-        if hasattr(litellm, 'openrouter_key'):
+        litellm.openai_key = clean_api_key
+        litellm.api_key = clean_api_key
+        if hasattr(litellm, "openrouter_key"):
             litellm.openrouter_key = None
-    else:  # OpenRouter
+        st.sidebar.success("OpenAI API key updated!")
+    else:
         old_key = st.session_state.get("openrouter_key", "None")
-        st.session_state.openrouter_key = api_key_input
+        st.session_state.openrouter_key = clean_api_key
         st.session_state.api_provider = "OpenRouter"
-        # Set OpenRouter key
-        litellm.openrouter_key = api_key_input
-        litellm.api_key = api_key_input
-        # Keep OpenAI key, but OpenRouter takes precedence
+        litellm.openrouter_key = clean_api_key
+        litellm.api_key = clean_api_key
+        st.sidebar.success("OpenRouter API key updated!")
 
-    # Confirm changes (debug print)
+    if clean_api_key != api_key_input:
+        st.sidebar.info("Whitespace characters in the API key were removed automatically.")
+
     print(f"[API Key Update] Provider: {api_provider}")
     print(f"[API Key Update] Old Key: ...{old_key[-10:] if old_key and len(old_key) > 10 else 'None'}")
-    print(f"[API Key Update] New Key: ...{api_key_input[-10:]}")
+    print(f"[API Key Update] New Key: ...{clean_api_key[-10:]}")
 
-    # Clear cached predictors when the API key changes
     try:
         get_predictors.clear()
         print("[API Key Update] Predictor cache cleared")
     except NameError:
-        pass  # Ignore if the function is not defined yet
+        pass
 
-    # Success message (show only the last 6 characters)
-    masked_key = f"...{api_key_input[-6:]}" if len(api_key_input) > 6 else "***"
+    masked_key = f"...{clean_api_key[-6:]}" if len(clean_api_key) > 6 else "***"
     st.toast(f"{api_provider} API Key updated successfully ({masked_key})")
+
+    if hasattr(st.session_state, "messages"):
+        del st.session_state.messages
+    if hasattr(st.session_state, "references"):
+        del st.session_state.references
+    if hasattr(st.session_state, "retrieval_info"):
+        del st.session_state.retrieval_info
+
     st.rerun()
+
 
 # Set the currently used provider and key
 current_provider = st.session_state.get("api_provider", "OpenAI")
@@ -202,35 +223,66 @@ if clear_btn:
         del st.session_state.messages
     if hasattr(st.session_state, "references"):
         del st.session_state.references
+    if hasattr(st.session_state, "retrieval_info"):
+        del st.session_state.retrieval_info
     st.rerun()
 
 if not generate_btn and not hasattr(st.session_state, "messages"):
 #    st.write("This is a demo of the Materials Synthesis Recipe Recommender. Please enter the desired material properties and click on the 'Recommend' button to get a list of materials synthesis recipes that can be used to synthesize materials with the desired properties.")
-    st.write("""
+    st.write(
+                    """
+This page generates literature-guided synthesis recipes for inorganic solid-state materials using a retrieval-augmented generation pipeline.
 
-1. Enter your personal ```OpenAI``` API key.                
-        We added the following model options to the recipe generator.
-   ```
-   model_options = [
-        "gpt-4.1-mini",
-        "gpt-4o-mini",
-        "gpt-5.2",
-        "gpt-5-mini",
-        "gpt-5",
-        "o3",
-        "o3-mini",
-        "o3-mini-low",
-        "o3-mini-high"
-    ]
-    ```
-    Make sure your API key has access to the model you want to use. 
-    
-3. Click the ```Update``` key button.
-4. Provide the information needed for prediction (e.g., materials, synthesis technique, application, etc.).
-5. (Optional) Adjust the number of data entries used for RAG, or upload additional reference papers (PDFs).
-6. Click ```Recommend``` button at the bottom left to generate a recipe
-7. Click ```Clear Conversation``` to start a new prediction, or continue with follow-up Q&A using the ```chat box``` below the generated response. 
-    """)
+For detailed documentation, source code, and implementation updates, see the GitHub repository:
+https://github.com/dongwon-jeon/ssr_recipe_generator_for_inorganic_materials
+
+1. Enter your personal `OpenAI` API key.
+   Make sure your API account has access to the model you want to use.
+
+2. Check that the models supported in this demo are enabled for your OpenAI project.
+   In the OpenAI Platform, go to `Settings > {your project} > Limits` and confirm that the models used in this demo are available under your project settings.
+
+   ```python
+   available_model_list = [
+       "gpt-4.1-mini",
+       "gpt-4o-mini",
+       "gpt-5.2",
+       "gpt-5-mini",
+       "gpt-5",
+       "o3",
+       "o3-mini",
+       "o3-mini-low",
+       "o3-mini-high"
+   ]
+
+3. Click the `Update` button after entering the API key.
+
+4. Fill in the prediction inputs.
+   - `Material Name`: target compound or composition
+   - `Synthesis Technique`: process type to guide recipe generation
+   - `Application`: intended use of the material, used to retrieve similar literature examples
+
+5. Optionally adjust `Number of Retrievals`.
+   - This controls how many retrieved literature recipes are used as reference exemplars for generation.
+
+6. Optionally upload additional reference papers in PDF format.
+   - Uploaded PDFs are parsed and used as additional user-provided references during recipe generation.
+
+7. Click the `Recommend` button to generate a recipe.
+
+8. The generated output includes:
+   - target materials
+   - precursor list
+   - stepwise synthesis recipe
+
+9. A `retrieval confidence` score is displayed with the generated recipe.
+   - This score indicates how well the retrieved reference recipes match the input query.
+
+10. Use the chat box below the generated response for follow-up questions or recipe revision requests.
+
+11. The generated recipe is a literature-guided suggestion and should be experimentally validated.
+"""
+    )
     st.stop()
 
 use_rag = top_k >= 1
@@ -352,24 +404,26 @@ def predict_recipe(material_name, synthesis_technique, application, other_contst
 
     if use_rag or files:
         predictor = rag_predictor
-        # Call embedding with the appropriate API key by provider
         emb = get_embedding(contributions, provider, api_key=api_key)
+        predictor.last_retrieval_info = None
+        predictor.last_prompt = None
     else:
         predictor = base_predictor
         emb = None
+        predictor.last_prompt = None
 
     if files:
         with st.spinner("Extracting recipes from PDFs..."):
             references = pdf_bytelist_to_recipes([file.read() for file in files])
     else:
         references = None
-    
+
     predictor.base_references = references
-    # Format model name for the provider
     predictor.model = format_model_name(model, provider)
 
     if other_contstraints:
         contributions += f"\n\n## Other Constraints\n{other_contstraints}"
+
     batch = [
         {
             "contribution": contributions,
@@ -405,36 +459,64 @@ def predict_recipe(material_name, synthesis_technique, application, other_contst
         print(error_details, file=sys.stderr)
         output = f"Error occurred during recipe generation: {type(e).__name__}: {str(e)}\n\nDetailed error:\n{error_details}"
 
+    user_prompt = predictor.last_prompt
+    if user_prompt is None:
+        user_prompt = predictor.build_prompt(batch[0])[0]["content"]
+
+    retrieval_info = None
+
     if use_rag or files:
         ref_outputs = []
+
         if references:
             ref_outputs.extend(references)
 
-        references = predictor.search(emb, k=top_k, return_rows=True)
+        raw_retrieval_info = getattr(predictor, "last_retrieval_info", None)
+        retrieval_rows = raw_retrieval_info["rows"] if raw_retrieval_info else None
 
-        for i in range(top_k):
-            rid, contribution, recipe = references['id'][i], references['contribution'][i], references['recipe'][i]
-            # rid, contribution, precursors, recipe = references['id'][i], references['contribution'][i], references["precursors"], references['recipe'][i]
+        if retrieval_rows:
+            num_refs = min(top_k, len(retrieval_rows.get("id", [])))
+            for i in range(num_refs):
+                rid = retrieval_rows["id"][i]
+                contribution_text = retrieval_rows["contribution"][i]
+                recipe_text = retrieval_rows["recipe"][i]
 
-            ref_output = f"Semantic Scholar: [{rid}](https://www.semanticscholar.org/paper/{rid})\n"
-            ref_output +=f"{contribution}\n\n{recipe}"
-            ref_outputs.append(ref_output)
+                ref_output = f"Semantic Scholar: [{rid}](https://www.semanticscholar.org/paper/{rid})\n"
+                ref_output += f"{contribution_text}\n\n{recipe_text}"
+                ref_outputs.append(ref_output)
+
+            retrieval_info = {
+                "retrieval_confidence": raw_retrieval_info.get("retrieval_confidence"),
+                "retrieval_query_proximity": raw_retrieval_info.get("retrieval_query_proximity"),
+                "retrieval_exemplar_consistency": raw_retrieval_info.get("retrieval_exemplar_consistency"),
+                "retrieval_top1_similarity": raw_retrieval_info.get("retrieval_top1_similarity"),
+            }
 
         references = ref_outputs
     else:
         references = None
-    
-    prompt = predictor.build_prompt(batch[0])[0]['content']
 
-    return output, references, prompt #, precursors
-    
+    return output, references, user_prompt, retrieval_info
+
 if not hasattr(st.session_state, "messages"):
     st.session_state.messages = []
 
     with st.spinner("Generating recipes..."):
         try:
-            recipe, references, user_prompt= predict_recipe(material_name, synthesis_technique, application, other_contstraints, top_k, model, use_rag, current_provider, files=files, api_key=current_api_key)
+            recipe, references, user_prompt, retrieval_info = predict_recipe(
+                material_name,
+                synthesis_technique,
+                application,
+                other_contstraints,
+                top_k,
+                model,
+                use_rag,
+                current_provider,
+                files=files,
+                api_key=current_api_key
+            )
             st.session_state.references = references
+            st.session_state.retrieval_info = retrieval_info
             st.session_state.messages.append({
                 "role": "user",
                 "content": user_prompt,
@@ -452,22 +534,31 @@ if not hasattr(st.session_state, "messages"):
             st.warning("Please resolve the issue and try again.")
             st.stop()
 else:
-    # Safe access to messages
     if len(st.session_state.messages) >= 2 and hasattr(st.session_state, "references"):
         recipe = st.session_state.messages[1]["content"]
         references = st.session_state.references
+        retrieval_info = st.session_state.get("retrieval_info", None)
         user_prompt = st.session_state.messages[0]["content"]
     else:
-        # If messages are missing, reset and rerun
         st.session_state.messages = []
         st.rerun()
 
-
 with st.chat_message("assistant"):
     st.header("Predicted Recipes")
-    # st.markdown(precursors)
+
+    if retrieval_info and retrieval_info.get("retrieval_confidence") is not None:
+        st.markdown(f"**Retrieval confidence:** {retrieval_info['retrieval_confidence']:.3f}")
+
+        with st.expander("How is retrieval confidence calculated?", expanded=False):
+            st.markdown("The retrieval confidence quantifies how well the retrieved reference recipes support the input query. It combines two factors. First, query-to-exemplar proximity measures whether the retrieved exemplars are semantically close to the input contribution. Second, exemplar-to-exemplar consistency measures whether the retrieved exemplars form a coherent reference group rather than a mixture of loosely related cases. Both terms are computed from cosine similarities between normalized contribution embeddings and are equally weighted in the final score. A higher retrieval confidence therefore indicates that the model retrieved references that are both relevant to the query and mutually consistent with one another. ")
+            st.latex(r"\mathrm{sim}_i = \hat{q} \cdot \hat{e}_i")
+            st.latex(r"R_{\mathrm{query}} = \sum_i w_i\,\mathrm{sim}_i")
+            st.latex(r"R_{\mathrm{cluster}} = \frac{1}{\binom{k}{2}} \sum_{i<j} \hat{e}_i \cdot \hat{e}_j")
+            st.latex(r"Q = \frac{R_{\mathrm{query}} + 1}{2}, \quad C = \frac{R_{\mathrm{cluster}} + 1}{2}")
+            st.latex(r"R = 0.5Q + 0.5C")
+
     st.markdown(recipe)
-    
+
     st.write("\n\n")
 
     if use_rag:

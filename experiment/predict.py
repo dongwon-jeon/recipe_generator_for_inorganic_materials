@@ -37,11 +37,13 @@ class RecipePredictor:
         self.job_description = f"material prediction job w/ {model}"
         self.max_completion_tokens = max_completion_tokens
         self.gpt5_reasoning_effort = gpt5_reasoning_effort
-        self.gpt5_text_verbosity = gpt5_text_verbosity  
+        self.gpt5_text_verbosity = gpt5_text_verbosity
+        self.last_prompt = None
 
     def build_prompt(self, item):
         contributions, recipe = item["contribution"], item["recipe"]
         prompt = self.prediction_prompt.format(contributions=contributions)
+        self.last_prompt = prompt
         return [
             {
                 "content": prompt,
@@ -246,23 +248,141 @@ class RAGRecipePredictor(RecipePredictor):
         self.retrieval_set.save_faiss_index("contributions_embedding", faiss_name)
 
         self.base_references = None
+        self.last_retrieval_info = None
+        self.retrieval_confidence_alpha = 0.5
+        self.retrieval_confidence_beta = 0.5
+
+    @staticmethod
+    def _normalize_vector(vector):
+        vector = np.asarray(vector, dtype=np.float32)
+        norm = np.linalg.norm(vector)
+        if norm == 0:
+            return vector
+        return vector / norm
+
+    @staticmethod
+    def _cosine_to_unit_interval(value):
+        return float(np.clip((value + 1.0) / 2.0, 0.0, 1.0))
+
+    def _compute_query_proximity(self, similarities):
+        if len(similarities) == 0:
+            return None
+
+        weights = np.asarray(list(range(len(similarities), 0, -1)), dtype=np.float32)
+        weights = weights / weights.sum()
+        return float(np.average(similarities, weights=weights))
+
+    def _compute_exemplar_consistency(self, normalized_embeddings):
+        if len(normalized_embeddings) < 2:
+            return [], None
+
+        matrix = np.vstack(normalized_embeddings).astype(np.float32)
+        similarity_matrix = matrix @ matrix.T
+
+        pairwise_similarities = []
+        for i in range(len(matrix)):
+            for j in range(i + 1, len(matrix)):
+                pairwise_similarities.append(float(similarity_matrix[i, j]))
+
+        return pairwise_similarities, float(np.mean(pairwise_similarities))
+
+    def _compute_retrieval_confidence(self, query_proximity, exemplar_consistency):
+        if query_proximity is None:
+            return None
+
+        if exemplar_consistency is None:
+            exemplar_consistency = query_proximity
+
+        query_score = self._cosine_to_unit_interval(query_proximity)
+        cluster_score = self._cosine_to_unit_interval(exemplar_consistency)
+
+        return float(
+            self.retrieval_confidence_alpha * query_score
+            + self.retrieval_confidence_beta * cluster_score
+        )
+
+    def _build_retrieval_info(self, query_embedding, results):
+        raw_embeddings = results.get("contributions_embedding", [])
+
+        if raw_embeddings is None or len(raw_embeddings) == 0:
+            return {
+                "rows": results,
+                "retrieved_exemplar_similarities": [],
+                "retrieval_top1_similarity": None,
+                "retrieval_exemplar_pairwise_similarities": [],
+                "retrieval_query_proximity": None,
+                "retrieval_exemplar_consistency": None,
+                "retrieval_confidence": None,
+            }
+
+        normalized_query = self._normalize_vector(np.asarray(query_embedding, dtype=np.float32))
+        normalized_embeddings = [
+            self._normalize_vector(np.asarray(embedding, dtype=np.float32))
+            for embedding in raw_embeddings
+        ]
+
+        exemplar_similarities = [
+            float(normalized_query @ normalized_embedding)
+            for normalized_embedding in normalized_embeddings
+        ]
+
+        query_proximity = self._compute_query_proximity(exemplar_similarities)
+        pairwise_similarities, exemplar_consistency = self._compute_exemplar_consistency(
+            normalized_embeddings
+        )
+
+        retrieval_confidence = self._compute_retrieval_confidence(
+            query_proximity=query_proximity,
+            exemplar_consistency=exemplar_consistency,
+        )
+
+        return {
+            "rows": results,
+            "retrieved_exemplar_similarities": exemplar_similarities,
+            "retrieval_top1_similarity": float(exemplar_similarities[0]) if len(exemplar_similarities) > 0 else None,
+            "retrieval_exemplar_pairwise_similarities": pairwise_similarities,
+            "retrieval_query_proximity": query_proximity,
+            "retrieval_exemplar_consistency": exemplar_consistency,
+            "retrieval_confidence": retrieval_confidence,
+        }
 
     def search(self, contribution, k=5, return_rows=False):
-        query_embedding = np.array(contribution)
-        scores, results = self.retrieval_set.get_nearest_examples("contributions_embedding", query_embedding, k)
-        if return_rows:
-            return results  
-        else:
-            retrieval_prompts = []
-            for i, (contribution, recipe) in enumerate(zip(results["contribution"], results['recipe'])):
-                retrieval_prompts.append(f"# Reference {i + 1}:\n{contribution}\n\n{recipe}")
-            retrieval_prompts = "\n\n".join(retrieval_prompts)
-            return retrieval_prompts
+        if k <= 0:
+            self.last_retrieval_info = None
+            if return_rows:
+                return {
+                    "id": [],
+                    "contribution": [],
+                    "recipe": [],
+                    "contributions_embedding": [],
+                }
+            return ""
 
-    
+        query_embedding = np.asarray(contribution, dtype=np.float32)
+        _, results = self.retrieval_set.get_nearest_examples(
+            "contributions_embedding",
+            query_embedding,
+            k,
+        )
+
+        self.last_retrieval_info = self._build_retrieval_info(
+            query_embedding=query_embedding,
+            results=results,
+        )
+
+        if return_rows:
+            return results
+
+        retrieval_prompts = []
+        for i, (contribution_text, recipe_text) in enumerate(zip(results["contribution"], results["recipe"])):
+            retrieval_prompts.append(f"# Reference {i + 1}:\n{contribution_text}\n\n{recipe_text}")
+
+        return "\n\n".join(retrieval_prompts)
+
     def build_prompt(self, item):
-        # contributions, recipe, embeddings = item["contribution"], item["recipe"], item["contributions_embedding"]
         contributions, recipe, embeddings = item["contribution"], item["recipe"], item["contributions_embedding"]
+        self.last_retrieval_info = None
+
         if self.rag_topk > 0:
             retrieval_prompts = self.search(embeddings, k=self.rag_topk)
         else:
@@ -273,6 +393,7 @@ class RAGRecipePredictor(RecipePredictor):
             retrieval_prompts = "\n\n".join(references) + "\n\n" + retrieval_prompts
 
         prompt = self.prediction_prompt.format(contributions=contributions, references=retrieval_prompts)
+        self.last_prompt = prompt
         return [
             {
                 "content": prompt,
