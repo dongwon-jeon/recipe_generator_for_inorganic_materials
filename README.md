@@ -9,6 +9,7 @@ Dataset: [https://huggingface.co/datasets/wjsehdrnfl428/dataset_for_recipe_gener
 This repository provides a retrieval-augmented generation pipeline for literature-guided recipe prediction in inorganic solid-state synthesis. The workflow first constructs a structured dataset from synthesis papers and then generates a stepwise synthesis recipe from user-defined key contributions.
 
 ![Figure 1](Figure_1.png)
+Figure 1. Schematic diagram illustrating the process of (a) constructing the synthesis recipe database and (b) inferring a synthesis recipe using the RAG method. 
 
 ## Overview
 
