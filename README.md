@@ -15,12 +15,13 @@ Figure 1. Schematic diagram illustrating the process of (a) constructing the syn
 
 The repository contains two main components.
 
-1. Dataset construction from published solid-state synthesis papers
-2. Recipe generation through retrieval-augmented generation
+1. Dataset construction from published solid-state synthesis papers [Hugging Face](https://huggingface.co/datasets/wjsehdrnfl428/dataset_for_recipe_generator)     
+
+2. Recipe generation pipeline through retrieval-augmented generation
 
 In the dataset construction stage, large language models are used to extract structured information from research papers, including target materials, precursors, process type, application, and stepwise synthesis recipes. These extracted records are then organized into a recipe dataset.
 
-In the recipe generation stage, the user specifies a target material, process type, and application. The input is converted into a key contribution, which is used to retrieve semantically similar examples from the dataset. The retrieved examples are then provided as references for recipe generation.
+In the recipe generation stage, the user specifies a target material, process type, application, and other constraints (optional). The input is converted into a key contribution, which is used to retrieve semantically similar examples from the dataset. The retrieved examples are then provided as references for recipe generation.
 
 ## Dataset structure
 
