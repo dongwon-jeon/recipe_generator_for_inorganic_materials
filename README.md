@@ -77,7 +77,7 @@ pip install -r requirements.txt
 
 ## Web demo usage
 
-Run the Streamlit demo with
+Try our website([https://ssr.recipe-generator.site/](https://ssr.recipe-generator.site/)) or run the Streamlit demo with
 
 ```bash
 streamlit run demo.py
