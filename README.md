@@ -155,4 +155,4 @@ Step 3: ...
 The generated recipe is a literature-guided synthesis suggestion and should be experimentally validated. The retrieval and generation outputs depend on the selected model, available API access, and user-provided inputs.
 
 ## Contacts
-e-mail: [jdwjyl2007@ajou.ac.kr](mailto:jdwjyl2007@ajou.ac.kr)
+e-mail: [jdwjyl2007@skku.edu](mailto:jdwjyl2007@skku.edu)
