@@ -1,6 +1,6 @@
 # Recipe Recommendations for Inorganic Solid-State Synthesis    
 
-Original paper: Under Revision [TBU]
+Original paper: [https://doi.org/10.1002/adma.74502](https://doi.org/10.1002/adma.74502)
 
 Dataset: [https://huggingface.co/datasets/wjsehdrnfl428/dataset_for_recipe_generator](https://huggingface.co/datasets/wjsehdrnfl428/dataset_for_recipe_generator)     
 
